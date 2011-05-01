@@ -1,9 +1,12 @@
 import urlparse
 import urllib
 import json
-import codecs
+import logging
 
 from SPARQLWrapper import SPARQLWrapper, JSON
+
+count_select = "count(?airport) AS ?result_count"
+fields_select = "?name ?icao ?iata ?faa ?lid ?latitude ?longitude ?airport"
 
 query = """
 PREFIX dbo: <http://dbpedia.org/ontology/>
@@ -11,7 +14,7 @@ PREFIX dbp: <http://dbpedia.org/property/>
 PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-SELECT ?name ?icao ?iata ?faa ?lid ?latitude ?longitude ?airport
+SELECT %s
 FROM <http://dbpedia.org>
 WHERE {
     ?airport rdf:type <http://dbpedia.org/ontology/Airport> .
@@ -76,44 +79,62 @@ WHERE {
         FILTER (!bound(?lat_f) && !bound(?long_f))
     }
 }
-ORDER BY ?airport OFFSET %i LIMIT %i
 """
 
-def fetch_aerodromes():
-   
-    limit = 500
+def do_query(query_string):
+    sparql = SPARQLWrapper("http://dbpedia.org/sparql")
+    sparql.setQuery(query_string)
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+    return results
 
+
+def aerodrome_count():
+    results = do_query(query % (count_select))
+    count = int(results['results']['bindings'][0]['result_count']['value'])
+    return count
+
+
+def fetch_aerodrome_set(offset, limit):
     aerodromes = {}
 
-    def fetchResults(offset):
-        sparql = SPARQLWrapper("http://dbpedia.org/sparql")
-        sparql.setQuery(query % (offset, limit))
-        sparql.setReturnFormat(JSON)
-        results = sparql.query().convert()
+    limit = "ORDER BY ?airport OFFSET %i LIMIT %i" % (offset, limit)
+    results = do_query((query % (fields_select)) + limit)
 
-        for result in results["results"]["bindings"]:
-            values = dict([(key, value['value']) for key, value \
-                           in result.items()])
-            values['location'] = {"type": "Point",
-                                  "coordinates": [values['longitude'],
-                                                  values['latitude']]}
-            del values['longitude']
-            del values['latitude']
+    for result in results["results"]["bindings"]:
+        values = dict([(key, value['value']) for key, value \
+                       in result.items()])
+        values['location'] = {"type": "Point",
+                              "coordinates": [values['longitude'],
+                                              values['latitude']]}
+        del values['longitude']
+        del values['latitude']
 
-            if 'name' not in values:
-                values['name'] = urllib.unquote(urlparse.urlparse(
-                        values['airport']).path.decode(
-                        'utf-8').split('/')[-1]).replace('_', ' ')
+        if 'name' not in values:
+            values['name'] = urllib.unquote(urlparse.urlparse(
+                values['airport']).path.decode('utf-8').split('/')[-1]).replace('_', ' ')
 
-            aerodromes[values['airport']] = values
-
-        if len(results["results"]["bindings"]) == limit:
-            fetchResults(offset + limit)
-
-    fetchResults(0)
+        
+        aerodromes[values['airport']] = values
+        logging.debug("Processed aerodrome %s" % (values['name']))
 
     return aerodromes
 
-results = fetch_aerodromes()
-print len(results)
-json.dump(results, codecs.open('aerodromes.json', 'w',  'utf-8'), ensure_ascii=False, indent=2)
+
+def fetch_aerodromes(batch_size, outfile):
+    aerodromes = {}
+    offset = 0
+    total_count = aerodrome_count()
+    logging.info("%i aerodromes to fetch" % (total_count))
+
+    while True:
+        logging.info("Fetching batch %i" % (offset))
+        results = fetch_aerodrome_set(offset, batch_size)
+        if len(results) == 0:
+            break
+        offset += batch_size
+        aerodromes.update(results)
+
+    logging.info("Fetched %i aerodromes" % (len(aerodromes)))
+    with outfile:
+        json.dump(aerodromes, outfile, indent=2)

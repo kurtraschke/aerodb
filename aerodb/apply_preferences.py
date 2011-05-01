@@ -1,17 +1,19 @@
 """Apply CSV preferences"""
-
-from preferences import Preferences
-from aerodromes import Aerodromes
+import logging
 
 
-def apply_preferences(infile, outfile, dry_run=False):
-    preferences = Preferences()
-    aerodromes = Aerodromes(filename=infile)
+from aerodb.data.preferences import Preferences
+from aerodb.data.aerodromes import Aerodromes
+
+
+def apply_preferences(preferences, infile, outfile, dry_run=False):
+    preferences = Preferences(preferences)
+    aerodromes = Aerodromes(infile)
 
     def zap(candidate_aerodromes, choice, field):
         for aerodrome in candidate_aerodromes:
             if aerodrome != choice:
-                print "Removing", field, "from", aerodrome
+                logging.info("Removing %s from %s" % (field, aerodrome))
                 if not dry_run:
                     del aerodromes.aerodromes[aerodrome][field]
 
@@ -22,6 +24,5 @@ def apply_preferences(infile, outfile, dry_run=False):
                 if pref is not None:
                     zap(aerodromes_for_code, pref, field)
 
-    aerodromes.write(outfile)
-
-apply_preferences("aerodromes.json", "aerodromes-dedup.json")
+    if not dry_run:
+        aerodromes.write(outfile)
