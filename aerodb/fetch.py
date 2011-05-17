@@ -5,16 +5,13 @@ import logging
 
 from SPARQLWrapper import SPARQLWrapper, JSON
 
-count_select = "count(?airport) AS ?result_count"
-fields_select = "?name ?icao ?iata ?faa ?lid ?latitude ?longitude ?airport"
-
 query = """
 PREFIX dbo: <http://dbpedia.org/ontology/>
 PREFIX dbp: <http://dbpedia.org/property/>
 PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-SELECT %s
+SELECT ?name ?icao ?iata ?faa ?lid ?latitude ?longitude ?airport
 FROM <http://dbpedia.org>
 WHERE {
     ?airport rdf:type <http://dbpedia.org/ontology/Airport> .
@@ -79,6 +76,7 @@ WHERE {
         FILTER (!bound(?lat_f) && !bound(?long_f))
     }
 }
+ORDER BY ?airport OFFSET %i LIMIT %i
 """
 
 def do_query(query_string):
@@ -89,17 +87,12 @@ def do_query(query_string):
     return results
 
 
-def aerodrome_count():
-    results = do_query(query % (count_select))
-    count = int(results['results']['bindings'][0]['result_count']['value'])
-    return count
-
-
 def fetch_aerodrome_set(offset, limit):
     aerodromes = {}
 
-    limit = "ORDER BY ?airport OFFSET %i LIMIT %i" % (offset, limit)
-    results = do_query((query % (fields_select)) + limit)
+    results = do_query(query % (offset + 1, limit))
+
+    logging.info("Result length is %i" % len(results["results"]["bindings"]))
 
     for result in results["results"]["bindings"]:
         values = dict([(key, value['value']) for key, value \
@@ -114,7 +107,8 @@ def fetch_aerodrome_set(offset, limit):
             values['name'] = urllib.unquote(urlparse.urlparse(
                 values['airport']).path.decode('utf-8').split('/')[-1]).replace('_', ' ')
 
-        
+
+        assert values['airport'] not in aerodromes, (aerodromes[values['airport']], values)
         aerodromes[values['airport']] = values
         logging.debug("Processed aerodrome %s" % (values['name']))
 
@@ -124,8 +118,6 @@ def fetch_aerodrome_set(offset, limit):
 def fetch_aerodromes(batch_size, outfile):
     aerodromes = {}
     offset = 0
-    total_count = aerodrome_count()
-    logging.info("%i aerodromes to fetch" % (total_count))
 
     while True:
         logging.info("Fetching batch %i" % (offset))
