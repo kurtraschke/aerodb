@@ -107,8 +107,6 @@ def fetch_aerodrome_set(offset, limit):
             values['name'] = urllib.unquote(urlparse.urlparse(
                 values['airport']).path.decode('utf-8').split('/')[-1]).replace('_', ' ')
 
-
-        assert values['airport'] not in aerodromes, (aerodromes[values['airport']], values)
         aerodromes[values['airport']] = values
         logging.debug("Processed aerodrome %s" % (values['name']))
 
