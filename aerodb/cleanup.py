@@ -1,10 +1,12 @@
 import logging
 
 from aerodb.data.aerodromes import Aerodromes
+from aerodb.duplicates import mark_iata_duplicates
 
-
-def remove_orphans(infile, outfile=None, dry_run=False):
+def cleanup(infile, outfile=None, dry_run=False):
     aerodromes = Aerodromes(infile)
+    mark_iata_duplicates(aerodromes)
+    
     to_delete = []
 
     for key, aerodrome in aerodromes.aerodromes.iteritems():

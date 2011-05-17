@@ -1,3 +1,5 @@
+import logging
+
 from aerodb.data.aerodromes import Aerodromes
 
 def duplicate_report(infile, outfile):
@@ -33,3 +35,12 @@ def duplicate_summary(infile):
                     print aerodromes.aerodromes[aerodrome]['name']
                     print '\t', aerodromes.aerodromes[aerodrome]['airport']
                 print
+
+def mark_iata_duplicates(aerodromes):
+    for aerodrome_list in aerodromes.indexes['iata'].values():
+        if len(aerodrome_list) > 1:
+            for aerodrome in aerodrome_list:
+                aerodrome = aerodromes.aerodromes[aerodrome]
+                logging.info("Marking %s duplicate for IATA code %s" % (aerodrome['name'], aerodrome['iata']))
+                aerodrome['iata_duplicate'] = True
+

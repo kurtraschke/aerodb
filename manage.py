@@ -3,7 +3,7 @@ import sys
 import logging
 
 from aerodb import duplicate_report, duplicate_summary, test_lookup
-from aerodb import apply_preferences, remove_orphans, fetch_aerodromes, export
+from aerodb import apply_preferences, cleanup, fetch_aerodromes, export
 
 parser = argparse.ArgumentParser(description='Management tool for aerodb.',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -50,16 +50,16 @@ ap_parser.set_defaults(func=lambda args: apply_preferences(args.preferences,
                                                              args.outfile,
                                                              args.dry_run))
 
-rmo_parser = subparsers.add_parser('remove_orphans',
-                                   help="Remove orphaned entries")
-rmo_parser.add_argument('-d', '--dry-run', action='store_true', default=False)
-rmo_parser.add_argument('infile', nargs='?', type=argparse.FileType('r'),
+cl_parser = subparsers.add_parser('cleanup',
+                                   help="Remove orphaned entries and mark IATA duplicates")
+cl_parser.add_argument('-d', '--dry-run', action='store_true', default=False)
+cl_parser.add_argument('infile', nargs='?', type=argparse.FileType('r'),
                         default=sys.stdin, help="JSON input file")
-rmo_parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'),
+cl_parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'),
                         default=sys.stdout, help="JSON output file")
-rmo_parser.set_defaults(func=lambda args: remove_orphans(args.infile,
-                                                         args.outfile,
-                                                         args.dry_run))
+cl_parser.set_defaults(func=lambda args: cleanup(args.infile,
+                                                 args.outfile,
+                                                 args.dry_run))
 
 
 lookup_parser = subparsers.add_parser('lookup', help="Perform test lookup")
